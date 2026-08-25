@@ -3,7 +3,10 @@
 The [Nostr Tank Arena](https://nostr-tank-arena.vercel.app) backlog, read straight off
 the relay. Pending, in progress, and done — with the npub that signed each state change.
 
-**Board:** https://tank-ops.vercel.app
+**Board:** https://tankops.vercel.app
+
+(`tank-ops.vercel.app` was already taken by somebody else's project, so the aliases are
+`tankops`, `tank-ops-board` and `tank-arena-ops` — all the same deployment.)
 
 There is no database behind this. Every column is derived from signed Nostr events that
 anybody with access to the same relay can fetch for themselves. That is the property
