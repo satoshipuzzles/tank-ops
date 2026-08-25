@@ -53,6 +53,41 @@ const draft = {
   content: clear ? 'put back — nobody is working on this' : 'picked up',
 }
 
+/**
+ * `--clear` has to look before it publishes.
+ *
+ * I reopened a task with this within an hour of shipping it. Clearing the
+ * marker publishes an *open* status, and an open status published after a
+ * resolve is newer than the resolve — so a finished task walked back into
+ * Pending. The board was right; the tool was wrong.
+ *
+ * Finishing a task is the *resolve*, which clears the marker by being newer.
+ * `--clear` is only for putting a task back down, so it refuses to run against
+ * one that is already closed rather than quietly undoing it.
+ */
+function newestStatus(ws, issueId) {
+  return new Promise((resolve) => {
+    let newest = null
+    const sub = 'peek'
+    const onMessage = (raw) => {
+      const m = JSON.parse(raw.toString())
+      if (m[0] === 'EVENT' && m[1] === sub) {
+        const e = m[2]
+        const root = e.tags.find((t) => t[0] === 'e' && t[3] === 'root')?.[1]
+        if (root === issueId && (!newest || e.created_at > newest.created_at)) newest = e
+        return
+      }
+      if ((m[0] === 'EOSE' || m[0] === 'CLOSED') && m[1] === sub) {
+        ws.off('message', onMessage)
+        ws.send(JSON.stringify(['CLOSE', sub]))
+        resolve(newest)
+      }
+    }
+    ws.on('message', onMessage)
+    ws.send(JSON.stringify(['REQ', sub, { kinds: [1630, 1631, 1632, 1633], '#e': [issueId], limit: 50 }]))
+  })
+}
+
 const event = finalizeEvent(draft, sk)
 const ws = new WebSocket(url)
 let done = false
@@ -88,7 +123,21 @@ ws.on('message', (raw) => {
         : end(2, `relay refused: ${msg[3] || 'no reason given'}`)
     }
     if (!msg[2]) return end(3, `relay refused the AUTH: ${msg[3] || 'no reason given'}`)
-    ws.send(JSON.stringify(['EVENT', event]))
+    if (!clear) {
+      ws.send(JSON.stringify(['EVENT', event]))
+      return
+    }
+    newestStatus(ws, issueId).then((newest) => {
+      if (newest && (newest.kind === 1631 || newest.kind === 1632)) {
+        return end(
+          1,
+          `refusing: ${issueId.slice(0, 12)}… is already ${newest.kind === 1631 ? 'resolved' : 'closed'}. ` +
+            'Clearing the marker would publish an open status newer than that and reopen it. ' +
+            'Finishing a task is the resolve; it clears the marker by being newer.',
+        )
+      }
+      ws.send(JSON.stringify(['EVENT', event]))
+    })
   }
 })
 ws.on('error', (e) => end(2, `could not reach ${url}: ${e.message}`))

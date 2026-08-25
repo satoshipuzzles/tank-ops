@@ -47,8 +47,16 @@ convention nobody follows:
 
 ```sh
 node tools/wip.mjs <issue-id>          # pick it up
-node tools/wip.mjs <issue-id> --clear  # put it back
+node tools/wip.mjs <issue-id> --clear  # put it back down
 ```
+
+**Finishing a task is the resolve, not `--clear`.** The resolve clears the
+marker by being newer than it. `--clear` publishes an *open* status, so running
+it after a resolve is newer than the resolve and walks a finished task back into
+Pending — which I did to my own board within an hour of shipping this. The tool
+reads the current status and refuses now, but the shape of the mistake is worth
+knowing: on a board where the newest status wins, every publish is a claim about
+*now*, and a stale claim published late beats a correct one published early.
 
 ## Login, and what the whitelist actually is
 
