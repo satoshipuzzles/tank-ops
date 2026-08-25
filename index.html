@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Tank Ops — the Tank Arena backlog</title>
+    <meta
+      name="description"
+      content="Pending, in progress and done for Nostr Tank Arena, read straight off the relay. Every column is signed events."
+    />
+    <link
+      rel="icon"
+      href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='6' fill='%230d1119'/><rect x='5' y='8' width='7' height='16' fill='%23ffc44d'/><rect x='13' y='8' width='7' height='11' fill='%237fe0a6'/><rect x='21' y='8' width='6' height='7' fill='%238d97a8'/></svg>"
+    />
+  </head>
+  <body>
+    <header id="bar">
+      <div class="brand">
+        <span class="brand-mark" aria-hidden="true"></span>
+        <div>
+          <h1>Tank Ops</h1>
+          <p class="fine" id="repo-line">the Nostr Tank Arena backlog</p>
+        </div>
+      </div>
+      <div class="bar-right">
+        <span class="who" id="who" hidden></span>
+        <button id="refresh" class="ghost" type="button" hidden>Refresh</button>
+        <button id="new-task" type="button" hidden>File a task</button>
+        <button id="login" type="button">Sign in with my npub</button>
+      </div>
+    </header>
+
+    <!-- The gate, said plainly. This relay is private and answers nothing at
+         all before it has seen an AUTH, so a login is not a nicety here — it is
+         the only way any of this is readable. -->
+    <section id="gate">
+      <div class="card">
+        <h2>This board reads a private relay</h2>
+        <p>
+          Every task here is a signed Nostr event on
+          <code id="gate-relay">wss://moooonboi.communities.buzz.xyz</code>. That relay
+          refuses a subscription until it has authenticated you — so sign in with your
+          npub and it will decide whether you get to read it. Nothing on this page can
+          overrule that, and nothing on this page is a second gate pretending to be one.
+        </p>
+        <p class="fine">
+          Needs a NIP-07 extension — Alby, nos2x, Amber via a bridge. The extension signs
+          a NIP-42 challenge; this page never sees a private key.
+        </p>
+        <div class="row">
+          <button id="login-2" type="button">Sign in with my npub</button>
+        </div>
+        <p class="error" id="gate-error" hidden></p>
+        <details class="advanced">
+          <summary>Relay</summary>
+          <p class="fine">
+            One websocket URL. Point it somewhere else if the backlog moves; a board that
+            only works against one hard-coded host is a board that dies with it.
+          </p>
+          <input id="relay-url" spellcheck="false" autocomplete="off" inputmode="url" />
+        </details>
+      </div>
+    </section>
+
+    <main id="board" hidden>
+      <div class="counts" id="counts"></div>
+      <div class="columns">
+        <section class="col" id="col-wip">
+          <h2>In progress <span class="n"></span></h2>
+          <p class="fine col-note">
+            Somebody signed an open status marked <code>wip</code>. The name is whoever
+            signed it, not a label anybody typed.
+          </p>
+          <div class="cards"></div>
+        </section>
+        <section class="col" id="col-pending">
+          <h2>Pending <span class="n"></span></h2>
+          <p class="fine col-note">Filed, and nothing has happened to it yet.</p>
+          <div class="cards"></div>
+        </section>
+        <section class="col" id="col-done">
+          <h2>Done <span class="n"></span></h2>
+          <p class="fine col-note">
+            Resolved or closed. The note on the status event is where the commit is.
+          </p>
+          <div class="cards"></div>
+        </section>
+      </div>
+      <p class="fine" id="board-note"></p>
+    </main>
+
+    <!-- Filing. The relay decides whether this lands; the page only signs it. -->
+    <dialog id="compose">
+      <form method="dialog">
+        <h2>File a task</h2>
+        <label>
+          Subject
+          <input id="c-subject" maxlength="120" placeholder="What is wrong, in one line" />
+        </label>
+        <label>
+          Detail
+          <textarea id="c-body" rows="9" placeholder="What happens, what should happen, and how to see it."></textarea>
+        </label>
+        <label>
+          Labels
+          <input id="c-labels" placeholder="bug, ui — comma separated" autocomplete="off" />
+        </label>
+        <p class="fine">
+          This is signed by your extension and published as a NIP-34 issue against the
+          repo. Whether it lands is the relay's call, and you will get its answer verbatim.
+        </p>
+        <p class="error" id="c-error" hidden></p>
+        <div class="row">
+          <button id="c-send" value="send">Sign and file</button>
+          <button class="ghost" value="cancel" type="submit">Cancel</button>
+        </div>
+      </form>
+    </dialog>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

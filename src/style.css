@@ -1,0 +1,222 @@
+:root {
+  color-scheme: dark;
+  --bg: #07090f;
+  --panel: #0e1421;
+  --line: #263449;
+  --text: #dfe8f5;
+  --dim: #8d97a8;
+  --accent: #ffc44d;
+  --go: #7fe0a6;
+  --warn: #ff9aa2;
+}
+
+/*
+ * `hidden` has to actually hide.
+ *
+ * The browser's `[hidden] { display: none }` lives in the UA stylesheet, so any
+ * author rule that sets `display` beats it however weak its selector is — and
+ * `#gate` below is a grid. This exact bug has shipped three times in the game
+ * repo next door; it is not shipping a fourth.
+ */
+[hidden] { display: none !important; }
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  min-height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font: 15px/1.55 ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+button {
+  font: inherit;
+  font-weight: 600;
+  padding: 9px 15px;
+  border-radius: 8px;
+  border: 1px solid var(--accent);
+  background: var(--accent);
+  color: #16120a;
+  cursor: pointer;
+}
+button.ghost { background: transparent; color: var(--text); border-color: var(--line); }
+button:hover:not(:disabled) { filter: brightness(1.12); }
+button:disabled { opacity: 0.5; cursor: default; }
+
+input, textarea {
+  display: block;
+  width: 100%;
+  margin-top: 6px;
+  padding: 10px 12px;
+  font: inherit;
+  color: var(--text);
+  background: #0b0f18;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+textarea { resize: vertical; }
+label { display: block; margin-bottom: 14px; color: var(--dim); font-size: 13px; }
+
+.fine { color: var(--dim); font-size: 13px; margin: 8px 0 0; }
+.error { color: #ff8f7a; font-size: 13px; margin: 12px 0 0; }
+code { background: #0b0f18; padding: 1px 5px; border-radius: 4px; font-size: 0.92em; }
+
+/* ------------------------------------------------------------------- bar */
+
+#bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--line);
+  background: var(--panel);
+  position: sticky;
+  top: 0;
+  z-index: 5;
+}
+.brand { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.brand h1 { margin: 0; font-size: 19px; letter-spacing: -0.4px; }
+.brand .fine { margin: 0; }
+.brand-mark {
+  width: 30px;
+  height: 22px;
+  border-radius: 4px;
+  flex: none;
+  background:
+    linear-gradient(90deg, var(--accent) 0 34%, var(--go) 34% 67%, var(--dim) 67% 100%);
+}
+.bar-right { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.who { color: var(--dim); font-size: 13px; }
+
+/* ------------------------------------------------------------------ gate */
+
+#gate {
+  display: grid;
+  place-items: center;
+  padding: 48px 20px;
+}
+.card {
+  width: min(620px, 100%);
+  min-width: 0;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 26px;
+}
+.card h2 { margin: 0 0 10px; font-size: 20px; }
+.row { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 18px; }
+.row button { flex: 0 1 auto; }
+.advanced { margin-top: 20px; }
+summary { cursor: pointer; color: var(--dim); font-size: 13px; }
+
+/* ----------------------------------------------------------------- board */
+
+#board { padding: 20px; }
+.counts {
+  display: flex;
+  gap: 18px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+  color: var(--dim);
+  font-size: 13px;
+}
+.counts b { color: var(--text); font-variant-numeric: tabular-nums; }
+.counts .warn b { color: var(--warn); }
+
+/*
+ * Three columns that become one on a phone.
+ *
+ * `minmax(0, 1fr)` rather than `1fr`: a grid track's automatic minimum is its
+ * content's min-content width, which quietly outranks the fraction and pushes
+ * the whole board wider than the screen. That is the same defect that had the
+ * game's leaderboard 591px wide inside a 390px phone, and it is worth not
+ * shipping twice in one day.
+ */
+.columns {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(300px, 100%), 1fr));
+  gap: 16px;
+  align-items: start;
+}
+.col {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 14px;
+  min-width: 0;
+}
+.col h2 { margin: 0; font-size: 15px; display: flex; justify-content: space-between; gap: 10px; }
+.col h2 .n { color: var(--dim); font-variant-numeric: tabular-nums; }
+.col-note { margin: 6px 0 12px; font-size: 12px; }
+#col-wip h2 { color: var(--accent); }
+#col-done h2 { color: var(--go); }
+.cards { display: flex; flex-direction: column; gap: 10px; }
+.empty { margin: 0; font-style: italic; }
+
+.task {
+  background: #0b0f18;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 12px;
+  min-width: 0;
+}
+.task h3 { margin: 0 0 8px; font-size: 14px; line-height: 1.4; }
+.task .meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.task .meta .fine { margin: 0; font-size: 12px; }
+.task pre {
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: 12px;
+  color: var(--dim);
+  margin: 8px 0 0;
+  max-height: 320px;
+  overflow: auto;
+}
+.task details summary { margin-top: 8px; font-size: 12px; }
+
+.tag {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+}
+.tag.human { color: var(--go); border-color: #2c5b45; }
+.tag.agent { color: var(--accent); border-color: #6b5628; }
+/* Shown rather than hidden, and marked rather than trusted — see whitelist.ts. */
+.tag.unverified { color: var(--warn); border-color: #5b2c34; }
+
+.labels { display: flex; gap: 5px; flex-wrap: wrap; margin-top: 8px; }
+.label {
+  font-size: 11px;
+  color: var(--dim);
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  padding: 1px 6px;
+}
+.worker { margin-top: 8px; font-size: 12px; color: var(--dim); }
+.worker b { color: var(--text); }
+
+/* --------------------------------------------------------------- compose */
+
+dialog {
+  width: min(620px, calc(100% - 32px));
+  min-width: 0;
+  background: var(--panel);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 24px;
+}
+dialog::backdrop { background: rgba(4, 6, 10, 0.72); }
+dialog h2 { margin: 0 0 16px; font-size: 18px; }
+
+@media (max-width: 620px) {
+  #bar { padding: 12px 14px; }
+  #board { padding: 14px; }
+  #gate { padding: 24px 14px; align-items: start; }
+  .card { padding: 20px 18px; }
+}
