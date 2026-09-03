@@ -15,7 +15,7 @@
 
 import './style.css'
 import { Relay, RelayError, type NostrEvent, type Signer } from './relay'
-import { KIND_ISSUE, KIND_STATUS, assemble, type Task } from './model'
+import { KIND_ASSIGN, KIND_ISSUE, KIND_STATUS, assemble, isAssignOp, type Task } from './model'
 import { KNOWN, resolveKnown, type Known } from './whitelist'
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string): T =>
@@ -122,11 +122,18 @@ async function load(): Promise<void> {
     // count: a limit does not bind, because it never drops until the relay's
     // own retention does, and the real bound would become somebody else's
     // storage config.
-    const [issues, statuses] = await Promise.all([
+    const [issues, statuses, notes] = await Promise.all([
       relay.list([{ kinds: [KIND_ISSUE], '#a': [REPO_A], limit: 500 }]),
       relay.list([{ kinds: [...KIND_STATUS], '#a': [REPO_A], limit: 800 }]),
+      // Assignment ops are kind-1 notes in the CLI's shape. The `#t` narrows
+      // it where the relay honours that filter; `isAssignOp` narrows it again
+      // here, because a PR comment with the repo's `a` tag is also a kind 1
+      // and must not become somebody's assignment.
+      relay.list([
+        { kinds: [KIND_ASSIGN], '#a': [REPO_A], '#t': ['assignment', 'unassignment'], limit: 800 },
+      ]),
     ])
-    tasks = assemble(issues, statuses)
+    tasks = assemble(issues, statuses, notes.filter(isAssignOp), REPO_OWNER)
     await loadProfiles(tasks)
     paint()
   } finally {
@@ -143,6 +150,10 @@ async function loadProfiles(list: Task[]): Promise<void> {
     want.add(t.author)
     if (t.workingOn) want.add(t.workingOn)
     if (t.status) want.add(t.status.pubkey)
+    for (const a of t.assignees) {
+      want.add(a.pubkey)
+      want.add(a.by)
+    }
   }
   const missing = [...want].filter((p) => !profiles.has(p))
   if (!missing.length) return
@@ -228,17 +239,88 @@ function card(t: Task): string {
   const labels = t.labels
     .map((l) => `<span class="label">${escapeHtml(l)}</span>`)
     .join('')
+  const assignees = t.assignees.length
+    ? `<div class="assignees">assigned to ${t.assignees
+        .map(
+          (a) =>
+            `<span class="assignee${a.trusted ? '' : ' untrusted'}"${
+              a.trusted
+                ? ''
+                : ` title="Signed by ${escapeHtml(nameFor(a.by))}, who is not the issue author or the repo owner. Buzz clients may not honour it."`
+            }>${escapeHtml(nameFor(a.pubkey))}` +
+            (t.column === 'done'
+              ? '</span>'
+              : `<button class="unassign" data-id="${t.id}" data-who="${a.pubkey}" title="Unassign ${escapeHtml(nameFor(a.pubkey))}" type="button">×</button></span>`),
+        )
+        .join(' ')}</div>`
+    : ''
+  // Anything not finished can be handed to somebody. Options come from the
+  // known-authors list rather than from profiles seen so far, so a teammate
+  // who has never filed anything is still assignable.
+  const assign =
+    t.column === 'done'
+      ? ''
+      : `<div class="assign-row"><select class="assign-who" data-id="${t.id}">` +
+        `<option value="">Assign to…</option>` +
+        [...known.entries()]
+          .map(([hex, k]) => `<option value="${hex}">${escapeHtml(k.label)}${k.agent ? ' (agent)' : ''}</option>`)
+          .join('') +
+        `</select><button class="assign ghost tiny" data-id="${t.id}" type="button">Assign</button></div>`
   return (
     `<article class="task" data-id="${t.id}">` +
     `<h3>${escapeHtml(t.subject)}</h3>` +
     `<div class="meta">${badge}<span class="fine">${escapeHtml(nameFor(t.author))} · ${ago(t.createdAt)}</span></div>` +
     (labels ? `<div class="labels">${labels}</div>` : '') +
     worker +
+    assignees +
     closed +
     `<details><summary>Detail</summary><pre>${escapeHtml(t.body.slice(0, 4000))}</pre></details>` +
+    assign +
     `</article>`
   )
 }
+
+// --------------------------------------------------------------- assigning
+
+/**
+ * Publish an assignment or unassignment, in the exact shape the Buzz CLI
+ * publishes — same kind, same tags — so Buzz Desktop and this board read each
+ * other's ops without a translation layer to drift.
+ */
+async function publishAssign(taskId: string, who: string, remove: boolean): Promise<void> {
+  if (!relay) return
+  const label = nameFor(who)
+  const verdict = await relay.publish({
+    kind: KIND_ASSIGN,
+    tags: [
+      ['e', taskId, '', 'root'],
+      ['a', REPO_A],
+      ['p', who],
+      ['t', remove ? 'unassignment' : 'assignment'],
+    ],
+    content: remove ? `Unassigned ${label} from this issue` : `Assigned this issue to ${label}`,
+  })
+  if (!verdict.ok) {
+    // Into the counts strip, which is always on screen — a per-card error slot
+    // would vanish with the repaint this triggers anyway.
+    $('counts').innerHTML = `<span class="warn">The relay refused the assignment: ${escapeHtml(verdict.reason || 'no reason given')}</span>`
+    return
+  }
+  await load()
+}
+
+document.addEventListener('click', (ev) => {
+  const el = ev.target as HTMLElement
+  const assignBtn = el.closest<HTMLButtonElement>('button.assign')
+  if (assignBtn) {
+    const id = assignBtn.dataset.id!
+    const sel = document.querySelector<HTMLSelectElement>(`select.assign-who[data-id="${id}"]`)
+    if (sel?.value) void publishAssign(id, sel.value, false)
+    return
+  }
+  const unassignBtn = el.closest<HTMLButtonElement>('button.unassign')
+  if (unassignBtn) void publishAssign(unassignBtn.dataset.id!, unassignBtn.dataset.who!, true)
+})
 
 // ------------------------------------------------------------------ filing
 

@@ -37,12 +37,50 @@ export const KNOWN: Known[] = [
   },
   {
     id: '67d1464ab57158c95e593b0f6d6d5b4c3f9b626cbf2dfda1e3c69e96973dae0c',
-    label: 'Splitscreen',
+    label: '00Puzzles',
     agent: true,
   },
   {
     id: 'ec2d4a3599d7ed0a9c7d6349d29774483fd1ddd0bce7ae41f7cc4c02c936cf57',
     label: 'cloudfodder',
+  },
+  {
+    id: 'f804a2254b67163339699fccb6acac6f77efbac4b1696cdfac66ea84ee83379d',
+    label: 'B^2',
+  },
+  {
+    id: '2dca6f265c036e166ec1d7ce5bf6042850145688009d5890b5bb769dc751d6d8',
+    label: 'P.F. Chang Mode',
+    agent: true,
+  },
+  {
+    id: 'a495f74e3d0cffc876fca0f3701fff66211d5fbeab005e3e0a66013577a540d1',
+    label: 'VMWiz',
+    agent: true,
+  },
+  {
+    id: 'e42c5af8fccccb766eb38d2b050bc4dfaaea95160559b1a625901f77e9bba1a5',
+    label: 'Wiz',
+    agent: true,
+  },
+  {
+    id: '2285eb3670555afa6ee85d4bb2294d66c3b562ab41c1c6b14e2c6394bf1e14e7',
+    label: 'Shipwright',
+    agent: true,
+  },
+  {
+    id: 'a820dab4815728e62055c53c2cd1d4f63fe59d1784d6a27c5fce371819c505e4',
+    label: 'rainmaker',
+    agent: true,
+  },
+  {
+    id: '025c17544412647d28618bcc1d182feb4768c146047cca84225da66c964e8b2c',
+    label: 'auggie-bz',
+    agent: true,
+  },
+  {
+    id: 'f8febcff75f68b2dd6bde0329e859421d5c27447991903956eacb705ec15668a',
+    label: 'tigs',
   },
 ]
 

@@ -114,6 +114,42 @@ const STATUSES = [
   status('b4'.repeat(32), 1630, 'a5'.repeat(32), PUZZ, now - 60),
 ]
 
+// VMWiz — on the board's known list, so the chip should carry the name.
+const VMWIZ = 'a495f74e3d0cffc876fca0f3701fff66211d5fbeab005e3e0a66013577a540d1'
+const B2 = 'f804a2254b67163339699fccb6acac6f77efbac4b1696cdfac66ea84ee83379d'
+
+/** An assignment op in the exact shape the Buzz CLI publishes: kind 1,
+ *  root e-tag, repo a-tag, `t` of assignment/unassignment, `p` per assignee
+ *  — or no `p` at all on a self-assign, where the signer is the assignee. */
+const op = (id, target, author, at, marker, who = null) => ({
+  id,
+  pubkey: author,
+  created_at: at,
+  kind: 1,
+  tags: [
+    ['e', target, '', 'root'],
+    ['a', REPO_A],
+    ...(who ? [['p', who]] : []),
+    ['t', marker],
+  ],
+  content: marker,
+  sig: '0'.repeat(128),
+})
+
+const OPS = [
+  // The issue author hands a1 to VMWiz: trusted, named chip.
+  op('d1'.repeat(32), 'a1'.repeat(32), PUZZ, now - 200, 'assignment', VMWIZ),
+  // Assigned and then taken back off: the newer unassignment wins and the
+  // seat is empty. A board that only read assignments would never clear one.
+  op('d2'.repeat(32), 'a2'.repeat(32), PUZZ, now - 200, 'assignment', VMWIZ),
+  op('d3'.repeat(32), 'a2'.repeat(32), PUZZ, now - 50, 'unassignment', VMWIZ),
+  // A stranger assigning somebody *else*: shown, but marked — Buzz clients
+  // only trust the issue author, the repo owner, or a self-assign.
+  op('d4'.repeat(32), 'a5'.repeat(32), STRANGER_PK, now - 150, 'assignment', B2),
+  // A self-assign in the CLI's own shape: no `p` tag at all.
+  op('d5'.repeat(32), 'a5'.repeat(32), AGENT, now - 140, 'assignment'),
+]
+
 const PROFILES = [
   {
     id: 'c1'.repeat(32),
@@ -156,7 +192,7 @@ function startRelay({ refuse = false } = {}) {
           ws.send(JSON.stringify(['CLOSED', sub, 'auth-required: not authenticated']))
           return
         }
-        const pool = [...ISSUES, ...STATUSES, ...PROFILES, ...published]
+        const pool = [...ISSUES, ...STATUSES, ...OPS, ...PROFILES, ...published]
         for (const f of filters) {
           for (const e of pool) {
             if (f.kinds && !f.kinds.includes(e.kind)) continue
@@ -313,8 +349,92 @@ try {
   })
   check(
     'the in-progress card names whoever signed the pickup',
-    /picked up by/.test(worker ?? '') && /Splitscreen|67d146/.test(worker ?? ''),
+    /picked up by/.test(worker ?? '') && /00Puzzles|67d146/.test(worker ?? ''),
     JSON.stringify(worker),
+  )
+
+  // ------------------------------------------------------- 3½. assignments
+
+  const chips = await page.evaluate(() => {
+    const byTitle = (re) =>
+      [...document.querySelectorAll('.task')].find((c) => re.test(c.querySelector('h3')?.textContent ?? ''))
+    const read = (card) =>
+      [...(card?.querySelectorAll('.assignee') ?? [])].map((el) => ({
+        name: el.childNodes[0]?.textContent ?? '',
+        untrusted: el.classList.contains('untrusted'),
+      }))
+    return {
+      a1: read(byTitle(/nobody has touched/)),
+      a2: read(byTitle(/being worked on/)),
+      a5: read(byTitle(/reopened/)),
+    }
+  })
+  check(
+    'an assignment from the issue author shows a named, trusted chip',
+    chips.a1.length === 1 && chips.a1[0].name === 'VMWiz' && !chips.a1[0].untrusted,
+    JSON.stringify(chips.a1),
+  )
+  check(
+    'an unassignment newer than the assignment clears the seat',
+    chips.a2.length === 0,
+    JSON.stringify(chips.a2),
+  )
+  check(
+    "a stranger's assignment of somebody else is shown but marked",
+    chips.a5.some((c) => c.name === 'B^2' && c.untrusted),
+    JSON.stringify(chips.a5),
+  )
+  check(
+    'a self-assign with no p tag lands on the signer, trusted',
+    chips.a5.some((c) => c.name === '00Puzzles' && !c.untrusted),
+    JSON.stringify(chips.a5),
+  )
+
+  // Assign from the card. The op that leaves must be byte-shape identical to
+  // the CLI's, or Buzz Desktop and this board stop reading each other.
+  const RAINMAKER = 'a820dab4815728e62055c53c2cd1d4f63fe59d1784d6a27c5fce371819c505e4'
+  await page.evaluate((who) => {
+    const card = [...document.querySelectorAll('.task')].find((c) =>
+      /nobody has touched/.test(c.querySelector('h3')?.textContent ?? ''))
+    const sel = card.querySelector('select.assign-who')
+    sel.value = who
+    card.querySelector('button.assign').click()
+  }, RAINMAKER)
+  const assignOp = await until(() =>
+    good.published.find((e) => e.tags.some((t) => t[0] === 't' && t[1] === 'assignment')) ?? null)
+  check(
+    'assigning from the card publishes the op in the CLI shape',
+    assignOp?.kind === 1 &&
+      assignOp.tags.some((t) => t[0] === 'e' && t[1] === 'a1'.repeat(32) && t[3] === 'root') &&
+      assignOp.tags.some((t) => t[0] === 'a' && t[1] === REPO_A) &&
+      assignOp.tags.some((t) => t[0] === 'p' && t[1] === RAINMAKER),
+    JSON.stringify(assignOp?.tags),
+  )
+  const chipAppeared = await until(async () =>
+    page.evaluate(() => {
+      const card = [...document.querySelectorAll('.task')].find((c) =>
+        /nobody has touched/.test(c.querySelector('h3')?.textContent ?? ''))
+      return [...(card?.querySelectorAll('.assignee') ?? [])].some((el) =>
+        /rainmaker/.test(el.textContent ?? '')) ? true : null
+    }))
+  check('and the board repaints with the new assignee', !!chipAppeared)
+
+  // And back off again, from the chip's ×.
+  await page.evaluate(() => {
+    const card = [...document.querySelectorAll('.task')].find((c) =>
+      /nobody has touched/.test(c.querySelector('h3')?.textContent ?? ''))
+    const x = [...card.querySelectorAll('.assignee')].find((el) => /rainmaker/.test(el.textContent ?? ''))
+      ?.querySelector('button.unassign')
+    x?.click()
+  })
+  const unassignOp = await until(() =>
+    good.published.find((e) =>
+      e.tags.some((t) => t[0] === 't' && t[1] === 'unassignment') &&
+      e.tags.some((t) => t[0] === 'p' && t[1] === RAINMAKER)) ?? null)
+  check(
+    'the chip\'s × publishes the matching unassignment',
+    !!unassignOp && unassignOp.tags.some((t) => t[0] === 'e' && t[1] === 'a1'.repeat(32) && t[3] === 'root'),
+    JSON.stringify(unassignOp?.tags),
   )
 
   // ----------------------------------------- 4. an unknown author is marked

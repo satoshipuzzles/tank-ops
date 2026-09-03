@@ -15,6 +15,24 @@ export const KIND_REPO = 30617
 export const KIND_ISSUE = 1621
 /** Status: open, applied/resolved, closed, draft — in that order. */
 export const KIND_STATUS = [1630, 1631, 1632, 1633] as const
+/**
+ * Assignment operations are kind-1 notes, because that is what the Buzz CLI
+ * publishes — checked against a real op on the relay, not guessed:
+ *
+ *     kind 1
+ *     ["e", <issue-id>, "", "root"]
+ *     ["a", <repo a-tag>]
+ *     ["p", <assignee>]          // absent on a self-assign; the signer is it
+ *     ["t", "assignment"]        // or "unassignment" to take it back off
+ *
+ * The Buzz clients' trust rule, from the CLI's own help: an op is trusted for
+ * *other* people only when the issue author or the repo owner signed it, and
+ * anybody may assign or unassign themselves. This board applies the same rule
+ * so the two never show different assignee rails — and shows untrusted ops
+ * anyway, marked, for the same reason unverified authors are shown: a board
+ * that silently drops a signed statement loses it.
+ */
+export const KIND_ASSIGN = 1
 
 export type Column = 'pending' | 'wip' | 'done' | 'draft'
 
@@ -35,6 +53,20 @@ export interface Task {
   status: NostrEvent | null
   /** Whoever signed the most recent `wip` status. Null when nobody has. */
   workingOn: string | null
+  /** Current assignees, latest op per person winning. */
+  assignees: Assignee[]
+}
+
+export interface Assignee {
+  pubkey: string
+  /**
+   * Whether the op that put them here passes the Buzz trust rule: signed by
+   * the issue author, the repo owner, or the assignee themselves. An untrusted
+   * assignee is still listed — marked, not hidden.
+   */
+  trusted: boolean
+  /** Who signed the winning op, for the card to say so. */
+  by: string
 }
 
 const tag = (e: NostrEvent, name: string): string | null =>
@@ -70,8 +102,29 @@ export function statusTarget(e: NostrEvent): string | null {
 export const isWip = (e: NostrEvent): boolean =>
   e.kind === 1630 && tags(e, 't').includes('wip')
 
+/** An assignment or unassignment op, in the CLI's shape. */
+export const isAssignOp = (e: NostrEvent): boolean => {
+  if (e.kind !== KIND_ASSIGN) return false
+  const t = tags(e, 't')
+  return t.includes('assignment') || t.includes('unassignment')
+}
+
+/**
+ * Who an op is about. The `p` tags name the assignees; a self-assign from the
+ * CLI carries no `p` at all, in which case the signer is the assignee.
+ */
+const opAssignees = (e: NostrEvent): string[] => {
+  const p = tags(e, 'p')
+  return p.length ? p : [e.pubkey]
+}
+
 /** Build the board. Latest status per issue wins; no status means pending. */
-export function assemble(issues: NostrEvent[], statuses: NostrEvent[]): Task[] {
+export function assemble(
+  issues: NostrEvent[],
+  statuses: NostrEvent[],
+  assignOps: NostrEvent[] = [],
+  repoOwner = '',
+): Task[] {
   const latest = new Map<string, NostrEvent>()
   const latestWip = new Map<string, NostrEvent>()
   for (const s of statuses) {
@@ -89,6 +142,22 @@ export function assemble(issues: NostrEvent[], statuses: NostrEvent[]): Task[] {
     }
   }
 
+  // Latest op per (issue, assignee) wins, the same tie-break as statuses. An
+  // `unassignment` winning means the seat is empty again.
+  const opsByIssue = new Map<string, Map<string, NostrEvent>>()
+  for (const op of assignOps) {
+    if (!isAssignOp(op)) continue
+    const target = statusTarget(op)
+    if (!target) continue
+    const perIssue = opsByIssue.get(target) ?? new Map<string, NostrEvent>()
+    opsByIssue.set(target, perIssue)
+    for (const who of opAssignees(op)) {
+      const seen = perIssue.get(who)
+      if (!seen || op.created_at > seen.created_at || (op.created_at === seen.created_at && op.id > seen.id))
+        perIssue.set(who, op)
+    }
+  }
+
   const byId = new Map<string, NostrEvent>()
   for (const i of issues) if (!byId.has(i.id)) byId.set(i.id, i)
 
@@ -96,6 +165,15 @@ export function assemble(issues: NostrEvent[], statuses: NostrEvent[]): Task[] {
   for (const issue of byId.values()) {
     const status = latest.get(issue.id) ?? null
     const wip = latestWip.get(issue.id) ?? null
+    const assignees: Assignee[] = []
+    for (const [who, op] of opsByIssue.get(issue.id) ?? []) {
+      if (!tags(op, 't').includes('assignment')) continue
+      assignees.push({
+        pubkey: who,
+        trusted: op.pubkey === issue.pubkey || op.pubkey === repoOwner || op.pubkey === who,
+        by: op.pubkey,
+      })
+    }
     let column: Column = 'pending'
     if (status) {
       if (status.kind === 1631 || status.kind === 1632) column = 'done'
@@ -115,6 +193,7 @@ export function assemble(issues: NostrEvent[], statuses: NostrEvent[]): Task[] {
       // and then closed it is not working on it, and a board that still says
       // they are sends people to ask them about finished work.
       workingOn: column === 'wip' ? (wip?.pubkey ?? status?.pubkey ?? null) : null,
+      assignees,
     })
   }
   // Newest first inside a column: a backlog read top-down should start with
