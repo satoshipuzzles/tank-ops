@@ -200,6 +200,44 @@ summary { cursor: pointer; color: var(--dim); font-size: 13px; }
 .worker { margin-top: 8px; font-size: 12px; color: var(--dim); }
 .worker b { color: var(--text); }
 
+/* ------------------------------------------------------------ assignment */
+
+.assignees { margin-top: 8px; font-size: 12px; color: var(--dim); display: flex; gap: 5px; flex-wrap: wrap; align-items: center; }
+.assignee {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  padding: 1px 6px;
+}
+/* Marked, not hidden — the op is real, the signer just is not one Buzz trusts. */
+.assignee.untrusted { color: var(--warn); border-color: #5b2c34; border-style: dashed; }
+.assignee .unassign {
+  border: none;
+  background: transparent;
+  color: var(--dim);
+  font-size: 13px;
+  line-height: 1;
+  padding: 0 2px;
+  cursor: pointer;
+}
+.assignee .unassign:hover { color: var(--warn); }
+.assign-row { display: flex; gap: 6px; margin-top: 10px; }
+.assign-row select {
+  flex: 1;
+  min-width: 0;
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  padding: 5px 8px;
+  font: inherit;
+  font-size: 12px;
+}
+.assign-row button { font-size: 12px; padding: 5px 12px; }
+
 /* --------------------------------------------------------------- compose */
 
 dialog {
